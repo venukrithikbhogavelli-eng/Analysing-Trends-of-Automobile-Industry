@@ -39,9 +39,47 @@ from auto_industry
 group by tier;
 
 /**Question6: Calculate a running cumulative sum of the sales value over the years, tracked separately for each unique car model.**/
-SELECT Name, year, selling_price, 
+select Name, year, selling_price, 
 sum(selling_price) over (partition by Name order by year rows between unbounded preceding and current row) as cumulative_sales_value
 FROM auto_industry;
 
+/**Question7: An interviewer asks you to write a report displaying total inventory metrics horizontally. Write a query that groups by 
+fuel type and shows the total count of Manual cars vs. Automatic cars in separate, side-by-side columns.**/
+select fuel,count(case when transmission = 'Manual' then 1 end) as manual_count,
+count(case when transmission = 'Automatic' then 1 end) as automatic_count,count(*) as total_combined_inventory
+from auto_industry
+group by fuel
+order by total_combined_inventory desc;
+
+/**Question8: Before doing a deep data analysis, we need to find missing or bad data points. Write a query that calculates the absolute count 
+and percentage of rows where mileage, engine, or seats contain null values, blank strings, or evaluate to zero.**/
+select count(*) as total_rows,
+sum(case when mileage is null or mileage = '' or mileage like '0.0%' then 1 else 0 end) as invalid_mileage_count,
+sum(case when engine is null or engine = '' then 1 else 0 end) as invalid_engine_count,
+sum(case when seats is null or seats = 0 then 1 else 0 end) as invalid_seats_count,
+round((sum(case when mileage is null or mileage = '' or mileage like '0.0%' then 1 else 0 end) / count(*)) * 100, 2) as mileage_error_rate_pct
+FROM auto_industry;
+
+/**Question9: Write a query that displays each manufacturing year, the total combined selling price of all cars from that year, and the 
+percentage increase or decrease in sales value compared to the previous year.**/
+WITH YearlySales as (
+    -- Step 1: Calculate total sales value grouped by year
+    select year,sum(selling_price) as total_sales_value
+    from auto_industry
+    group by year
+),
+SalesComparison AS (
+    -- Step 2: Grab the prior year's total value using the LAG() window function
+    select year,total_sales_value,LAG(total_sales_value) over (order by year) as previous_year_sales
+    from YearlySales
+)
+-- Step 3: Run the percentage growth calculation
+select year,total_sales_value as current_year_sales,coalesce(previous_year_sales, 0) as prior_year_sales,
+    case 
+        when previous_year_sales is null then '0.00% (Baseline Year)'
+        else concat(round(((total_sales_value - previous_year_sales) / previous_year_sales) * 100, 2),'%')
+    end as percentage_change
+from SalesComparison
+order by year desc;
 
 
